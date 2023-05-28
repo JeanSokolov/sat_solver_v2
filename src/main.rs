@@ -1,7 +1,7 @@
 use std::{
-    f32::INFINITY,
+    f64::INFINITY,
     fs::File,
-    io::{stdin, BufRead, BufReader},
+    io::{stdin, BufRead, BufReader}, ops::Index,
 };
 
 const DEFAULT_PATH: &'static str = "./KI.txt";
@@ -22,11 +22,11 @@ fn parse_file() -> std::io::Result<Vec<String>> {
 }
 
 fn transform_equation(
-    most_significant_constraint: &mut Vec<f32>,
+    most_significant_constraint: &mut Vec<f64>,
     current_index: usize,
-) -> Vec<f32> {
+) -> Vec<f64> {
     let len = most_significant_constraint.len();
-    let mut transformed_equation: Vec<f32> = Vec::new();
+    let mut transformed_equation: Vec<f64> = Vec::new();
     for mut values in most_significant_constraint.clone() {
         values = values / most_significant_constraint[current_index] * -1.0;
         transformed_equation.push(values);
@@ -35,35 +35,48 @@ fn transform_equation(
     return transformed_equation;
 }
 
-fn generate_matrix_objective_fn(objective_function: &String) -> Vec<f32> {
-    let mut objective_fn: Vec<f32> = Vec::new();
+fn generate_matrix_objective_fn(objective_function: &String, number_of_constraints: usize) -> Vec<f64> {
+    let mut objective_fn: Vec<f64> = Vec::new();
     let variables: Vec<&str> = objective_function.split('+').collect();
     for s in variables.into_iter().skip(1) {
         objective_fn.push(
             s.trim().split('*').collect::<Vec<&str>>()[0]
-                .parse::<f32>()
+                .parse::<f64>()
                 .unwrap(),
         );
+    }
+    // add slack-variables to objective fn
+    for i in 0..number_of_constraints{
+        objective_fn.push(0.0);
     }
 
     return objective_fn;
 }
 
-fn generate_matrix_constraints(file_content: &mut Vec<String>) -> Vec<Vec<f32>> {
-    let mut constraints: Vec<Vec<f32>> = Vec::new();
-    for s in file_content {
+fn generate_matrix_constraints(file_content: &mut Vec<String>) -> Vec<Vec<f64>> {
+    let mut constraints: Vec<Vec<f64>> = Vec::new();
+    let number_of_constraints = file_content.len();
+    for (index,s) in file_content.iter().enumerate() {
         let tmp_vec_str: Vec<&str> = s.split('+').collect::<Vec<&str>>();
-        let mut tmp_vec_f32: Vec<f32> = Vec::new();
+        let mut tmp_vec_f64: Vec<f64> = Vec::new();
+        let mut amount_variables:usize = 0;
         // grabbing lhs
         for t in tmp_vec_str.clone().into_iter().skip(1) {
-            tmp_vec_f32.push(
+            tmp_vec_f64.push(
                 t.trim().split('*').collect::<Vec<&str>>()[0]
-                    .parse::<f32>()
+                    .parse::<f64>()
                     .unwrap(),
             );
+            amount_variables = tmp_vec_f64.len();
         }
+        // adding slack variables
+        for i in 0..number_of_constraints{
+            tmp_vec_f64.push(0.0);
+        }
+        tmp_vec_f64[index+amount_variables] = 1.0;
+
         // grabbing rhs
-        tmp_vec_f32.push(
+        tmp_vec_f64.push(
             tmp_vec_str
                 .clone()
                 .last()
@@ -73,20 +86,20 @@ fn generate_matrix_constraints(file_content: &mut Vec<String>) -> Vec<Vec<f32>> 
                 .collect::<Vec<&str>>()[1]
                 .replace(";", "")
                 .replace(" ", "")
-                .parse::<f32>()
+                .parse::<f64>()
                 .unwrap(),
         );
-        constraints.push(tmp_vec_f32);
+        constraints.push(tmp_vec_f64);
     }
 
     return constraints;
 }
 
-fn solve(mut objective_fn: Vec<f32>, mut constraints: Vec<Vec<f32>>) {
+fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
     let mut i: usize = 0;
-    let mut cost: f32 = 0.0;
+    let mut cost: f64 = 0.0;
     // max # of iterations = ammount of variable
-    while i < objective_fn.len() {
+    while i < 7{ //objective_fn.len() {
         // find most promising variable
         let mut tmp_obj_fn = objective_fn.clone();
         for n in 0..tmp_obj_fn.len(){
@@ -104,8 +117,8 @@ fn solve(mut objective_fn: Vec<f32>, mut constraints: Vec<Vec<f32>>) {
 
         println!("\nCurrent variable: x{}", index_max_factor);
         // find most limiting constraint
-        let mut lhs: Vec<f32> = Vec::new();
-        let mut rhs: Vec<f32> = Vec::new();
+        let mut lhs: Vec<f64> = Vec::new();
+        let mut rhs: Vec<f64> = Vec::new();
         for constraint in constraints.clone() {
             lhs.push(constraint[index_max_factor]);
             rhs.push(constraint.last().unwrap().to_owned());
@@ -128,7 +141,7 @@ fn solve(mut objective_fn: Vec<f32>, mut constraints: Vec<Vec<f32>>) {
 
         let mut most_significant_constraint = &mut constraints[most_significant_constraint_index];
 
-        let x: Vec<f32> = transform_equation(&mut most_significant_constraint, index_max_factor);
+        let x: Vec<f64> = transform_equation(&mut most_significant_constraint, index_max_factor);
 
         println!("TRANSFORMED CONSTRAINT VALUES: {:?}", x);
         for j in 0..lhs.len() {
@@ -185,7 +198,7 @@ fn main() {
         objective_function = &tmp;
     }
     // convert string/substrings to 32-bit floats, generating a matrix
-    let objective_fn = generate_matrix_objective_fn(objective_function);
+    let objective_fn = generate_matrix_objective_fn(objective_function, file_content.len());
     let constraints = generate_matrix_constraints(&mut file_content);
 
     println!("Objective f: {:?}", objective_fn);
