@@ -1,7 +1,7 @@
 use std::{
     f64::INFINITY,
     fs::File,
-    io::{stdin, BufRead, BufReader}, ops::Index,
+    io::{stdin, BufRead, BufReader},
 };
 
 const DEFAULT_PATH: &'static str = "./KI.txt";
@@ -47,7 +47,7 @@ fn generate_matrix_objective_fn(objective_function: &String, number_of_constrain
     }
     // add slack-variables to objective fn
     for i in 0..number_of_constraints{
-        objective_fn.push(0.0);
+        objective_fn.push(-0.0);
     }
 
     return objective_fn;
@@ -70,10 +70,12 @@ fn generate_matrix_constraints(file_content: &mut Vec<String>) -> Vec<Vec<f64>> 
             amount_variables = tmp_vec_f64.len();
         }
         // adding slack variables
+        // ToDo: add R1,2,3 aka artificial vars etc.
         for i in 0..number_of_constraints{
             tmp_vec_f64.push(0.0);
         }
-        tmp_vec_f64[index+amount_variables] = 1.0;
+        // slack variables as -1, as code only needs to cover minimization problems
+        tmp_vec_f64[index+amount_variables] = -1.0;
 
         // grabbing rhs
         tmp_vec_f64.push(
@@ -95,27 +97,39 @@ fn generate_matrix_constraints(file_content: &mut Vec<String>) -> Vec<Vec<f64>> 
     return constraints;
 }
 
+fn is_calc_done(mut objective_fn: Vec<f64>) -> bool{
+    let max_factor = (objective_fn
+        .iter()
+        .max_by(|(a), (b)| a.total_cmp(b)))
+    .unwrap();
+    if max_factor.le(&0.0){
+        return true;
+    }else{
+        return false;
+    }
+}
+// !is_calc_done(objective_fn[0..objective_fn.len()-constraints.len()].to_vec()) 
+
 fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
     let mut i: usize = 0;
     let mut cost: f64 = 0.0;
     // max # of iterations = ammount of variable
-    while i < 7{ //objective_fn.len() {
+    while i < objective_fn.len() {
         // find most promising variable
         let mut tmp_obj_fn = objective_fn.clone();
         for n in 0..tmp_obj_fn.len(){
-            if tmp_obj_fn[n].eq(&0.0){
+            if tmp_obj_fn[n].eq(&-0.0){
                 tmp_obj_fn[n]=-INFINITY;
             }
         }
 
-        let index_max_factor = (tmp_obj_fn
+        let mut index_max_factor = (tmp_obj_fn
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(index, _)| index))
         .unwrap();
-
-        println!("\nCurrent variable: x{}", index_max_factor);
+        println!("Current variable: x{}", index_max_factor);
         // find most limiting constraint
         let mut lhs: Vec<f64> = Vec::new();
         let mut rhs: Vec<f64> = Vec::new();
@@ -125,11 +139,38 @@ fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
         }
         let mut n: usize = 0;
         // iterate through the new equations, dividing rhs value by coefficient of lhs summand e.g. 3x=12 to x=4
+        // while doing so, check that the variables respect the non-negative constraint
         while n < lhs.len() {
-            println!("{:?}={:?}", lhs[n], rhs[n]);
-            rhs[n] = rhs[n] / lhs[n];
-            lhs[n] = 1.0;
+            //println!("Pre Calc {:?}={:?}", lhs[n], rhs[n]);
+            if lhs[n].ge(&0.0){
+                if rhs[n].ge(&0.0){
+                    rhs[n] = rhs[n] / lhs[n];
+                    lhs[n] = 1.0;
+                }else{
+                    rhs[n] = INFINITY;
+                    lhs[n] = INFINITY;
+                }
+            }else{
+                if rhs[n].ge(&0.0){
+                    rhs[n] = INFINITY;
+                    lhs[n] = INFINITY;
+                }else{
+                    rhs[n] = rhs[n] / lhs[n];
+                    lhs[n] = 1.0;
+                }
+            }
+            //println!("Post Calc {:?}={:?}", lhs[n], rhs[n]);
             n += 1;
+        }
+        let max_val = rhs.iter()
+            .max_by(|a, b| a.total_cmp(b))
+        .unwrap();
+        let min_val = rhs.iter()
+            .min_by(|a, b| a.total_cmp(b))
+        .unwrap();
+        if min_val.eq(max_val){
+            println!("optimum found");
+            break;
         }
         // determine most restrictive constraint for (current/remaining) most significant variable in objective function
         let most_significant_constraint_index = (rhs
@@ -138,20 +179,20 @@ fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
             .min_by(|(_, a), (_, b)| a.total_cmp(b))
             .map(|(index, _)| index))
         .unwrap();
-
+        //println!("{:?}", most_significant_constraint_index);
         let mut most_significant_constraint = &mut constraints[most_significant_constraint_index];
 
         let x: Vec<f64> = transform_equation(&mut most_significant_constraint, index_max_factor);
 
-        println!("TRANSFORMED CONSTRAINT VALUES: {:?}", x);
+        //println!("TRANSFORMED CONSTRAINT VALUES: {:?}", x);
         for j in 0..lhs.len() {
             let mult = constraints[j][index_max_factor];
-            println!(
+            /* println!(
                 "Constraint {} of iteration {}: {:?}",
                 j + 1,
                 i,
                 constraints[j]
-            );
+            ); */
             if j.ne(&most_significant_constraint_index) {
                 for k in 0..constraints[j].len() {
                     constraints[j][k] += (x[k] * mult);
@@ -175,13 +216,38 @@ fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
                 cost += (x.last().unwrap() * mult);
             }
         }
-        println!("NEW CONSTRAINT VALUES: {:?}", constraints);
-
+        for k in constraints.clone() {
+            //println!("NEW CONSTRAINT VALUES: {:?}", k);
+        }
         objective_fn[index_max_factor] = 0.0;
-        println!("NEW OBJECTIVE FUNCTION: {:?}= {cost}", objective_fn);
+        println!("\nNEW OBJECTIVE FUNCTION: {:?}= {cost}", objective_fn);
         i += 1;
     }
-    println!("Done after {} iterations", i);
+    println!("\nDone after {} iterations", i);
+    let mut variable_index = Vec::new();
+    for n in 0..objective_fn.len()-constraints.len(){
+        if objective_fn[n].eq(&0.0){
+            variable_index.push(n);
+        }
+    }
+    let mut variable_values = Vec::new();
+    for index in variable_index.clone(){
+        let mut tmp_vec = Vec::new();
+        for k in constraints.clone(){
+            tmp_vec.push(k[index]);
+        }
+        let mut index_max_factor = (tmp_vec
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.total_cmp(b))
+            .map(|(index, _)| index))
+        .unwrap();
+        variable_values.push(constraints[index_max_factor].last().unwrap());
+    }
+    println!("p = {cost}");
+    for i in 0..variable_index.len(){
+        println!("x{} = {}", variable_index[i], variable_values[i]);    
+    }
 }
 
 fn main() {
