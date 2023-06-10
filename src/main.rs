@@ -165,9 +165,8 @@ fn solve(mut objective_fn: Vec<f64>, mut constraints: Vec<Vec<f64>>) {
         .unwrap();
         // grab value/vector behind determined index
         let mut most_significant_constraint = &mut constraints[most_significant_constraint_index];
-        
-        let x: Vec<f64> = transform_equation(&mut most_significant_constraint, index_max_factor);
 
+        let x: Vec<f64> = transform_equation(&mut most_significant_constraint, index_max_factor);
 
         // insert transformed equation/value of currently selected variable into all constraints other than currently selected constraint/row
         // for currently selected constraint: normalize values, so that coefficient of currently selected variable is 1
