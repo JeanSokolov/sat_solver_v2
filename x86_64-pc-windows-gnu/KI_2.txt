@@ -1,0 +1,5 @@
+// Objective function
+max: + 6*x0 + 5*x1;
+// constraints
+ + 1*x0 + 1*x1 >= 5;
+ + 3*x0 + 2*x1 >= 12;
