@@ -1,6 +1,6 @@
 # KI
 ## Rust
-### Compiler ("cargo") aufsetzen
+### Setting up the compiler "cargo"
 Official installation instructions: https://doc.rust-lang.org/cargo/getting-started/installation.html
 
 Direct download-link for Windows: https://win.rustup.rs/
