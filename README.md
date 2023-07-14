@@ -21,6 +21,8 @@ For Windows:
 
   If you want to compile your project normally you can simply run the command cargo build. Adding the flag -r or --release results in building the release version of the project.
   
+### Example of building and running the code
+https://github.com/JeanSokolov/sat_solver_v2/assets/107756820/e9dc024b-9d7d-40d2-8239-f27eefbadf4e
 
 ### Simplex-algorithm
 Source code at src/main.rs
